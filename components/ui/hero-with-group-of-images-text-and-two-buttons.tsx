@@ -2,6 +2,7 @@ import { MoveRight, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
+import Link from "next/link";
 
 function Hero() {
   return (
@@ -23,12 +24,16 @@ function Hero() {
               </p>
             </div>
             <div className="flex flex-row gap-4">
-              <Button size="lg" className="gap-4" variant="outline">
-                查看示例 <ImageIcon className="w-4 h-4" />
-              </Button>
-              <Button size="lg" className="gap-4">
-                立即开始 <MoveRight className="w-4 h-4" />
-              </Button>
+              <Link href="/sign-in">
+                <Button size="lg" className="gap-4" variant="outline">
+                  查看示例 <ImageIcon className="w-4 h-4" />
+                </Button>
+              </Link>
+              <Link href="/sign-in">
+                <Button size="lg" className="gap-4">
+                  立即开始 <MoveRight className="w-4 h-4" />
+                </Button>
+              </Link>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-8">

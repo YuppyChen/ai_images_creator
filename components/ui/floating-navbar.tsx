@@ -8,6 +8,7 @@ import {
 } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export const FloatingNav = ({
   navItems,
@@ -23,7 +24,7 @@ export const FloatingNav = ({
   alwaysVisible?: boolean;
 }) => {
   const { scrollYProgress } = useScroll();
-
+  const pathname = usePathname();
   const [visible, setVisible] = useState(alwaysVisible);
 
   useMotionValueEvent(scrollYProgress, "change", (current) => {
@@ -68,21 +69,35 @@ export const FloatingNav = ({
           className
         )}
       >
-        {navItems.map((navItem: any, idx: number) => (
-          <Link
-            key={`link=${idx}`}
-            href={navItem.link}
-            className={cn(
-              "relative dark:text-neutral-50 items-center flex space-x-1 text-neutral-600 dark:hover:text-neutral-300 hover:text-neutral-500"
-            )}
-          >
-            <span className="block sm:hidden">{navItem.icon}</span>
-            <span className="hidden sm:block text-sm">{navItem.name}</span>
-          </Link>
-        ))}
+        {navItems.map((navItem: any, idx: number) => {
+          const isActive = pathname === navItem.link;
+          return (
+            <Link
+              key={`link=${idx}`}
+              href={navItem.link}
+              className={cn(
+                "relative items-center flex space-x-1 transition-colors duration-200",
+                isActive 
+                  ? "text-primary font-medium" 
+                  : "dark:text-neutral-50 text-neutral-600 dark:hover:text-neutral-300 hover:text-neutral-500"
+              )}
+            >
+              <span className="block sm:hidden">{navItem.icon}</span>
+              <span className="hidden sm:block text-sm">{navItem.name}</span>
+              {isActive && (
+                <span className="absolute inset-x-0 -bottom-1.5 h-0.5 bg-primary rounded-full" />
+              )}
+            </Link>
+          );
+        })}
         <Link 
           href="/sign-in" 
-          className="border text-sm font-medium relative border-neutral-200 dark:border-white/[0.2] text-black dark:text-white px-4 py-2 rounded-full"
+          className={cn(
+            "border text-sm font-medium relative border-neutral-200 dark:border-white/[0.2] px-4 py-2 rounded-full transition-colors duration-200",
+            pathname === "/sign-in"
+              ? "bg-primary text-primary-foreground border-primary"
+              : "text-black dark:text-white"
+          )}
         >
           <span>登录</span>
           <span className="absolute inset-x-0 w-1/2 mx-auto -bottom-px bg-gradient-to-r from-transparent via-blue-500 to-transparent h-px" />
