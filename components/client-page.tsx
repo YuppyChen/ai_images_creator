@@ -3,11 +3,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { ImageIcon, PlusCircle, X, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { ImageIcon, PlusCircle, X, ChevronLeft, ChevronRight, AlertCircle, Check, Copy } from "lucide-react";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import { ImageGenerationLoading } from "@/components/ui/loading";
-import useTextToImage from "@/components/hooks/use-text-to-image";
+import useTextToImage, { ImageGenerationHistory } from "@/components/hooks/use-text-to-image";
 
 // 提示消息接口
 interface ToastMessage {
@@ -25,11 +25,12 @@ const showToast = ({ title, description, variant }: ToastMessage) => {
 };
 
 // 提示词输入表单组件
-function PromptInputForm({ credits, onGenerate, setInputPrompt, inputPrompt }: { 
+function PromptInputForm({ credits, onGenerate, setInputPrompt, inputPrompt, isCreditsLoading }: { 
   credits: number, 
   onGenerate: (prompt: string) => Promise<void>,
   setInputPrompt: (prompt: string) => void,
-  inputPrompt: string 
+  inputPrompt: string,
+  isCreditsLoading: boolean
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -61,7 +62,11 @@ function PromptInputForm({ credits, onGenerate, setInputPrompt, inputPrompt }: {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <span className="text-sm text-muted-foreground">剩余点数:</span>
-              <span className="font-medium">{credits}</span>
+              {isCreditsLoading ? (
+                <span className="w-6 h-5 bg-muted/30 rounded-md animate-pulse"></span>
+              ) : (
+                <span className="font-medium">{credits}</span>
+              )}
             </div>
             <Button variant="outline" size="sm" className="gap-1.5">
               <PlusCircle className="h-4 w-4" />
@@ -83,7 +88,7 @@ function PromptInputForm({ credits, onGenerate, setInputPrompt, inputPrompt }: {
           <Button 
             className="h-10 px-5 whitespace-nowrap" 
             onClick={handleGenerate}
-            disabled={isGenerating || !inputPrompt.trim()}
+            disabled={isGenerating || !inputPrompt.trim() || credits < 1}
           >
             {isGenerating ? "生成中..." : "生成图像"}
           </Button>
@@ -105,12 +110,45 @@ function ErrorDisplay({ message }: { message: string }) {
 
 // 提示词显示组件
 function PromptDisplay({ prompt }: { prompt: string }) {
+  const [copied, setCopied] = useState(false);
+  
+  // 复制提示词到剪贴板
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(prompt).then(() => {
+      setCopied(true);
+      // 2秒后重置复制状态
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  
   if (!prompt) return null;
   
   return (
-    <div className="bg-muted/20 rounded-md p-2 text-xs text-muted-foreground line-clamp-1 mt-3">
-      <span className="font-medium text-foreground">提示词: </span>
-      {prompt}
+    <div className="bg-muted/30 rounded-md p-3 mt-4 text-sm flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-foreground">提示词</span>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-7 px-2 text-xs flex items-center gap-1"
+          onClick={copyToClipboard}
+        >
+          {copied ? (
+            <>
+              <span className="text-green-500">已复制</span>
+              <Check className="h-3 w-3 text-green-500" />
+            </>
+          ) : (
+            <>
+              <span>复制</span>
+              <Copy className="h-3 w-3" />
+            </>
+          )}
+        </Button>
+      </div>
+      <p className="text-muted-foreground break-words whitespace-pre-wrap">
+        {prompt}
+      </p>
     </div>
   );
 }
@@ -127,7 +165,7 @@ function SkeletonImage() {
 // 骨架屏提示词
 function SkeletonPrompt() {
   return (
-    <div className="h-6 mt-3 bg-muted/30 rounded-md animate-pulse"></div>
+    <div className="h-6 mt-4 bg-muted/30 rounded-md animate-pulse"></div>
   );
 }
 
@@ -353,6 +391,110 @@ function ImageGallery({ images, isLoading, error, currentPrompt }: {
   );
 }
 
+// 历史记录项组件
+function HistoryItem({ 
+  history, 
+  onSelect, 
+  isSelected 
+}: { 
+  history: ImageGenerationHistory, 
+  onSelect: () => void,
+  isSelected: boolean
+}) {
+  // 确保至少有一张图片
+  const thumbnailUrl = history.image_urls[0] || '';
+  const date = new Date(history.created_at).toLocaleString('zh-CN', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  return (
+    <div 
+      className={`flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors ${
+        isSelected ? 'bg-primary/10' : 'hover:bg-accent'
+      }`}
+      onClick={onSelect}
+    >
+      <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border">
+        {thumbnailUrl ? (
+          <Image
+            src={thumbnailUrl}
+            alt="缩略图"
+            fill
+            className="object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-muted">
+            <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+          </div>
+        )}
+      </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <p className="text-sm font-medium truncate">{history.prompt}</p>
+        <p className="text-xs text-muted-foreground">{date} · {history.image_urls.length}张图片</p>
+      </div>
+    </div>
+  );
+}
+
+// 历史记录列表组件
+function HistoryList({ 
+  history, 
+  isLoading, 
+  error,
+  onSelectHistory,
+  selectedIndex
+}: { 
+  history: ImageGenerationHistory[],
+  isLoading: boolean,
+  error: string | null,
+  onSelectHistory: (index: number) => void,
+  selectedIndex: number | null
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-3 p-2">
+            <div className="h-12 w-12 flex-shrink-0 rounded-md bg-muted/30 animate-pulse"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-muted/30 rounded animate-pulse"></div>
+              <div className="h-3 w-24 bg-muted/30 rounded animate-pulse"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return <ErrorDisplay message={error} />;
+  }
+
+  if (history.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <p>暂无历史记录</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1">
+      {history.map((item, index) => (
+        <HistoryItem 
+          key={item.id} 
+          history={item} 
+          onSelect={() => onSelectHistory(index)}
+          isSelected={selectedIndex === index}
+        />
+      ))}
+    </div>
+  );
+}
+
 // 保存生成记录
 interface GenerationRecord {
   prompt: string;
@@ -363,7 +505,20 @@ interface GenerationRecord {
 // 导出客户端页面组件
 export default function ClientPage() {
   // 使用文生图hook
-  const { generateImages, isGenerating, isLoading, imageUrls, error } = useTextToImage();
+  const { 
+    generateImages, 
+    isGenerating, 
+    isLoading, 
+    imageUrls, 
+    error,
+    credits,
+    isCreditsLoading,
+    creditsError,
+    history,
+    isHistoryLoading,
+    historyError,
+    fetchUserHistory
+  } = useTextToImage();
   
   // 输入提示词状态
   const [inputPrompt, setInputPrompt] = useState("");
@@ -371,10 +526,18 @@ export default function ClientPage() {
   // 当前生成的提示词
   const [currentPrompt, setCurrentPrompt] = useState("");
   
+  // 选中的历史记录索引
+  const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number | null>(null);
+  
+  // 当前显示的图片
+  const [displayedImages, setDisplayedImages] = useState<string[]>([]);
+
   // 当图片数组变化时打印日志
   useEffect(() => {
     if (imageUrls.length > 0) {
       console.log('收到新的图片数组:', imageUrls);
+      setDisplayedImages(imageUrls);
+      setSelectedHistoryIndex(null); // 重置历史记录选择
     }
   }, [imageUrls]);
   
@@ -386,26 +549,54 @@ export default function ClientPage() {
     await generateImages(prompt);
   };
 
+  // 处理选择历史记录
+  const handleSelectHistory = (index: number) => {
+    if (index >= 0 && index < history.length) {
+      const selectedHistory = history[index];
+      setDisplayedImages(selectedHistory.image_urls);
+      setCurrentPrompt(selectedHistory.prompt);
+      setSelectedHistoryIndex(index);
+    }
+  };
+
   // 使用full-width-container强制覆盖父容器宽度限制
   return (
     <div className="full-width-container">
       <div className="content-container py-4">
         {/* 顶部提示词输入区域 */}
         <PromptInputForm 
-          credits={5} 
+          credits={credits} 
           onGenerate={handleGenerate} 
           setInputPrompt={setInputPrompt}
           inputPrompt={inputPrompt}
+          isCreditsLoading={isCreditsLoading}
         />
         
-        {/* 图片展示区域 */}
-        <div className="mt-6">
-          <ImageGallery 
-            images={imageUrls} 
-            isLoading={isLoading || isGenerating}
-            error={error}
-            currentPrompt={currentPrompt}
-          />
+        {/* 主体内容区 */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* 左侧历史记录列表 */}
+          <div className="md:col-span-1">
+            <div className="rounded-lg border bg-background p-4">
+              <h2 className="text-lg font-bold mb-3">历史记录</h2>
+              <HistoryList 
+                history={history}
+                isLoading={isHistoryLoading}
+                error={historyError}
+                onSelectHistory={handleSelectHistory}
+                selectedIndex={selectedHistoryIndex}
+              />
+            </div>
+          </div>
+          
+          {/* 右侧图片展示区域 */}
+          <div className="md:col-span-3">
+            <ImageGallery 
+              images={displayedImages} 
+              isLoading={isLoading || isGenerating}
+              error={error}
+              currentPrompt={currentPrompt}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -8,7 +8,7 @@ export default function MarketingLayout({
   return (
     <div className="min-h-screen flex flex-col">
       <FloatingNavDemo />
-      <div className="flex-1 flex flex-col mt-16">
+      <div className="flex-1 flex flex-col max-w-screen-xl mx-auto pt-32">
         {children}
       </div>
     </div>
