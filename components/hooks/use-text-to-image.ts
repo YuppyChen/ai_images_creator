@@ -48,25 +48,19 @@ const useTextToImage = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
-  const [results, setResults] = useState<TextToImageResult>({
-    imageUrls: [],
-    isLoading: false,
-    error: null
-  });
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // 用户点数状态
-  const [creditsData, setCreditsData] = useState<UserCredits>({
-    credits: 0,
-    isLoading: true,
-    error: null
-  });
+  const [credits, setCredits] = useState(0);
+  const [isCreditsLoading, setIsCreditsLoading] = useState(true);
+  const [creditsError, setCreditsError] = useState<string | null>(null);
 
   // 历史记录状态
-  const [historyData, setHistoryData] = useState<HistoryResult>({
-    history: [],
-    isLoading: true,
-    error: null
-  });
+  const [history, setHistory] = useState<ImageGenerationHistory[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   
   // 使用ref来跟踪是否已经处理过成功状态
   const hasProcessedSuccess = useRef<boolean>(false);
@@ -97,7 +91,8 @@ const useTextToImage = () => {
   // 获取用户点数
   const fetchUserCredits = useCallback(async () => {
     try {
-      setCreditsData(prev => ({ ...prev, isLoading: true, error: null }));
+      setIsCreditsLoading(true);
+      setCreditsError(null);
       
       const response = await fetchWithTimeout('/api/user/credits', {}, 15000);
       const data = await response.json();
@@ -106,25 +101,20 @@ const useTextToImage = () => {
         throw new Error(data.error || '获取点数失败');
       }
       
-      setCreditsData({
-        credits: data.credits,
-        isLoading: false,
-        error: null
-      });
+      setCredits(data.credits);
+      setIsCreditsLoading(false);
     } catch (error) {
       console.error('获取用户点数错误:', error);
-      setCreditsData(prev => ({ 
-        ...prev, 
-        isLoading: false, 
-        error: error instanceof Error ? error.message : '获取点数失败' 
-      }));
+      setCreditsError(error instanceof Error ? error.message : '获取点数失败');
+      setIsCreditsLoading(false);
     }
   }, []);
 
   // 获取用户历史记录
   const fetchUserHistory = useCallback(async (limit = 10, offset = 0) => {
     try {
-      setHistoryData(prev => ({ ...prev, isLoading: true, error: null }));
+      setIsHistoryLoading(true);
+      setHistoryError(null);
       
       const response = await fetchWithTimeout(`/api/user/history?limit=${limit}&offset=${offset}`, {}, 15000);
       const data = await response.json();
@@ -133,20 +123,12 @@ const useTextToImage = () => {
         throw new Error(data.error || '获取历史记录失败');
       }
       
-      setHistoryData({
-        history: data.history,
-        isLoading: false,
-        error: null
-      });
-
-      // 移除自动显示历史记录的行为
+      setHistory(data.history);
+      setIsHistoryLoading(false);
     } catch (error) {
       console.error('获取用户历史记录错误:', error);
-      setHistoryData(prev => ({ 
-        ...prev, 
-        isLoading: false, 
-        error: error instanceof Error ? error.message : '获取历史记录失败' 
-      }));
+      setHistoryError(error instanceof Error ? error.message : '获取历史记录失败');
+      setIsHistoryLoading(false);
     }
   }, []);
 
@@ -188,25 +170,21 @@ const useTextToImage = () => {
         // 确保results数组存在
         if (data.output.results && Array.isArray(data.output.results)) {
           // 提取所有图片URL
-          const imageUrls = data.output.results.map((result: any) => result.url);
-          console.log('成功获取图片URLs:', imageUrls);
+          const urls = data.output.results.map((result: any) => result.url);
+          console.log('成功获取图片URLs:', urls);
           
-          setResults({
-            imageUrls,
-            isLoading: false,
-            error: null
-          });
+          setImageUrls(urls);
+          setIsLoading(false);
+          setError(null);
 
           // 更新用户点数和历史记录
           fetchUserCredits();
           fetchUserHistory();
         } else {
           console.error('API返回成功但没有图片结果:', data);
-          setResults({
-            imageUrls: [],
-            isLoading: false,
-            error: '获取图片失败'
-          });
+          setImageUrls([]);
+          setIsLoading(false);
+          setError('获取图片失败');
         }
         
         setIsGenerating(false);
@@ -217,11 +195,9 @@ const useTextToImage = () => {
         // 标记已处理
         hasProcessedSuccess.current = true;
         clearPolling();
-        setResults({
-          imageUrls: [],
-          isLoading: false,
-          error: '图像生成失败: ' + (data.output.message || '')
-        });
+        setImageUrls([]);
+        setIsLoading(false);
+        setError('图像生成失败: ' + (data.output.message || ''));
         setIsGenerating(false);
         
         // 任务失败后更新用户点数（可能已恢复）
@@ -236,11 +212,9 @@ const useTextToImage = () => {
       // 发生错误时也标记为已处理
       hasProcessedSuccess.current = true;
       clearPolling();
-      setResults({
-        imageUrls: [],
-        isLoading: false,
-        error: error instanceof Error ? error.message : '未知错误'
-      });
+      setImageUrls([]);
+      setIsLoading(false);
+      setError(error instanceof Error ? error.message : '未知错误');
       setIsGenerating(false);
       
       // 发生错误后更新用户点数（可能已恢复）
@@ -248,90 +222,87 @@ const useTextToImage = () => {
     }
   };
 
-  // 生成图像函数
-  const generateImages = async (prompt: string) => {
-    // 重置状态
-    setResults({
-      imageUrls: [],
-      isLoading: true,
-      error: null
-    });
-    setIsGenerating(true);
-    setTaskId(null);
-    hasProcessedSuccess.current = false;
+  // 开始轮询任务状态
+  const startPolling = useCallback((taskId: string) => {
+    console.log('开始轮询任务状态:', taskId);
     
-    // 确保清理之前的轮询
+    // 清理现有轮询（如果有）
     clearPolling();
+    
+    // 创建新的轮询
+    const interval = setInterval(() => {
+      checkTaskStatus(taskId);
+    }, 2000);
+    
+    setPollInterval(interval);
+  }, []);
 
+  // 生成图片
+  const generateImages = async (prompt: string) => {
+    if (!prompt.trim()) {
+      throw new Error('提示词不能为空');
+    }
+    
     try {
-      console.log('开始创建图像生成任务');
-      // 创建任务
+      // 重置状态
+      setIsGenerating(true);
+      setIsLoading(true);
+      setError(null);
+      setTaskId(null);
+      
+      // 发送请求
       const response = await fetchWithTimeout('/api/text-to-image', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt })
-      }, 60000); // 增加超时时间到60秒
-
+        body: JSON.stringify({ prompt }),
+      }, 30000);
+      
       const data = await response.json();
-
+      
       if (!response.ok) {
-        throw new Error(data.error || '创建图像生成任务失败');
+        throw new Error(data.error || '请求失败');
       }
-
-      console.log('创建任务成功:', data);
-
-      // 保存任务ID
-      const newTaskId = data.output.task_id;
+      
+      // 获取任务ID并开始轮询
+      const newTaskId = data.output?.task_id;
+      
+      if (!newTaskId) {
+        throw new Error('未获取到任务ID');
+      }
+      
+      console.log('已创建任务:', newTaskId);
       setTaskId(newTaskId);
-
-      // 立即检查一次任务状态
-      await checkTaskStatus(newTaskId);
       
-      // 如果已经处理过成功状态，不再设置轮询
-      if (hasProcessedSuccess.current) {
-        console.log('首次检查已完成任务，不再设置轮询');
-        return;
-      }
-
-      // 开始轮询任务状态（每3秒检查一次）
-      console.log('设置轮询任务');
-      const interval = setInterval(() => {
-        if (hasProcessedSuccess.current) {
-          console.log('任务已完成，清理轮询');
-          clearPolling();
-          return;
-        }
-        checkTaskStatus(newTaskId);
-      }, 3000);
+      // 开始轮询任务状态
+      startPolling(newTaskId);
       
-      setPollInterval(interval);
     } catch (error) {
-      console.error('生成图像出错:', error);
-      setResults({
-        imageUrls: [],
-        isLoading: false,
-        error: error instanceof Error ? error.message : '未知错误'
-      });
-      setIsGenerating(false);
+      console.error('生成图像请求失败:', error);
       
-      // 错误后更新用户点数（可能已扣除或恢复）
-      fetchUserCredits();
+      setIsGenerating(false);
+      setIsLoading(false);
+      setError(error instanceof Error ? error.message : '未知错误');
+      
+      throw error;
     }
   };
 
   return {
     generateImages,
+    imageUrls,
+    isLoading,
+    error,
     isGenerating,
-    ...results,
-    credits: creditsData.credits,
-    isCreditsLoading: creditsData.isLoading,
-    creditsError: creditsData.error,
-    history: historyData.history,
-    isHistoryLoading: historyData.isLoading,
-    historyError: historyData.error,
+    credits,
+    isCreditsLoading,
+    creditsError,
+    history,
+    isHistoryLoading,
+    historyError,
     fetchUserHistory,
+    taskId
   };
 };
 

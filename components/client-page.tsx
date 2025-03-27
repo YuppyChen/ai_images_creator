@@ -8,6 +8,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { ImageGenerationLoading } from "@/components/ui/loading";
 import useTextToImage, { ImageGenerationHistory } from "@/components/hooks/use-text-to-image";
+import React from "react";
 
 // 提示消息接口
 interface ToastMessage {
@@ -261,34 +262,59 @@ function ImagePreview({
           <ChevronRight className="h-6 w-6" />
         </button>
       </div>
-      
-      {/* 计数器 - 确保点击计数器不会触发关闭 */}
-      <div className="absolute bottom-4 left-0 right-0 text-center text-white" onClick={(e) => e.stopPropagation()}>
-        <span className="bg-black/50 px-3 py-1 rounded-full text-sm">
-          {index + 1} / {images.length}
-        </span>
-      </div>
     </div>
   );
 }
 
 // 图片画廊组件
-function ImageGallery({ images, isLoading, error, currentPrompt }: { 
+function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, history }: { 
   images: string[], 
   isLoading: boolean, 
   error: string | null,
-  currentPrompt: string
+  currentPrompt: string,
+  isAllLoading: boolean,
+  history: ImageGenerationHistory[]
 }) {
-  const [loadedImages, setLoadedImages] = useState<boolean[]>([]);
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  // 显示预览状态
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewPrompt, setPreviewPrompt] = useState("");
   
-  // 图片数组变化时重置加载状态
+  // 图片加载状态
+  const [loadedImages, setLoadedImages] = useState<boolean[]>([]);
+  
+  // 创建组合后的视图数据，将图片与其来源的提示词关联起来
+  const viewItems = React.useMemo(() => {
+    // 整理历史记录数据，按记录分组而不是单独的图片
+    let items: {
+      imageUrls: string[], 
+      prompt: string, 
+      createdAt: string
+    }[] = [];
+    
+    // 添加历史记录中的图片，每个历史记录作为一组
+    history.forEach(item => {
+      items.push({
+        imageUrls: item.image_urls,
+        prompt: item.prompt,
+        createdAt: item.created_at
+      });
+    });
+    
+    // 按创建时间排序，最新的在最前面
+    items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    return items;
+  }, [history]);
+  
+  // 初始化图片加载状态
   useEffect(() => {
-    if (images.length > 0) {
-      console.log('重置图片加载状态，图片数量:', images.length);
-      setLoadedImages(new Array(images.length).fill(false));
+    // 计算所有历史记录中的总图片数
+    const totalImages = viewItems.reduce((total, item) => total + item.imageUrls.length, 0);
+    if (totalImages > 0) {
+      setLoadedImages(new Array(totalImages).fill(false));
     }
-  }, [images]);
+  }, [viewItems]);
   
   // 处理图片加载完成
   const handleImageLoad = (index: number) => {
@@ -297,308 +323,257 @@ function ImageGallery({ images, isLoading, error, currentPrompt }: {
       newState[index] = true;
       return newState;
     });
-    console.log(`图片${index}加载完成`);
   };
   
-  // 打开预览
-  const openPreview = (index: number) => {
-    setPreviewIndex(index);
+  // 打开预览，itemIndex是记录索引，imageIndex是该记录内的图片索引
+  const openPreview = (itemIndex: number, imageIndex: number = 0) => {
+    // 计算全局图片索引
+    let globalIndex = 0;
+    for (let i = 0; i < itemIndex; i++) {
+      globalIndex += viewItems[i].imageUrls.length;
+    }
+    globalIndex += imageIndex;
+    
+    setPreviewIndex(globalIndex);
+    setPreviewPrompt(viewItems[itemIndex].prompt);
+    setIsPreviewOpen(true);
   };
   
   // 关闭预览
   const closePreview = () => {
-    setPreviewIndex(null);
+    setIsPreviewOpen(false);
+  };
+  
+  // 复制提示词
+  const copyPrompt = (prompt: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(prompt)
+      .then(() => {
+        showToast({
+          title: "已复制",
+          description: "提示词已复制到剪贴板",
+          variant: "default"
+        });
+      })
+      .catch(error => {
+        console.error("复制失败:", error);
+      });
+  };
+  
+  // 格式化日期时间
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('zh-CN', {
+      year: '2-digit',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(/\//g, '-');
   };
 
+  // 如果仍在加载并且是首次加载整个组件，显示整体骨架屏
+  if (isAllLoading) {
+    return (
+      <div>
+        <h2 className="text-xl font-bold mb-4">历史作品</h2>
+        <div className="space-y-10">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="overflow-hidden">
+              <div className="mb-2 text-sm font-semibold text-muted-foreground">
+                <div className="h-5 w-32 bg-muted/20 animate-pulse"></div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-[65%] flex space-x-1">
+                  {Array.from({ length: 4 }).map((_, imgIdx) => (
+                    <div key={imgIdx} className="aspect-square w-1/4 bg-muted/20 animate-pulse">
+                      <div className="w-full h-full flex items-center justify-center">
+                        <ImageIcon className="h-5 w-5 text-muted-foreground/20" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="w-[25%] h-full bg-muted/10 p-3 animate-pulse min-h-[80px]">
+                  <div className="h-4 bg-muted/30 animate-pulse mb-2 rounded-sm w-[80%]"></div>
+                  <div className="h-4 bg-muted/30 animate-pulse w-[60%] rounded-sm"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  // 获取所有图片，用于预览
+  const allImages = viewItems.flatMap(item => item.imageUrls);
+  
   return (
-    <div className="w-full">
-      <h2 className="text-lg font-bold mb-3">历史作品</h2>
+    <div>
+      <h2 className="text-xl font-bold mb-4">历史作品</h2>
       
       {error && <ErrorDisplay message={error} />}
       
-      {isLoading ? (
-        <div>
-          {/* 骨架屏图片网格 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-3">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={`skeleton-image-${index}`} className="w-full">
-                <SkeletonImage />
+      <div className="space-y-10">
+        {/* 正在生成的图片占位符 */}
+        {isLoading && (
+          <div className="overflow-hidden">
+            <div className="mb-2 text-sm font-semibold text-muted-foreground">
+              正在生成...
+            </div>
+            <div className="flex items-start gap-4">
+              <div className="w-[65%] aspect-video bg-muted/10 relative">
+                <ImageGenerationLoading />
               </div>
-            ))}
-          </div>
-          
-          {/* 骨架屏提示词 - 只显示一行 */}
-          <SkeletonPrompt />
-        </div>
-      ) : (
-        <div>
-          {/* 图片网格 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {images.length > 0 ? (
-              // 显示生成的图像
-              images.map((imageUrl, index) => (
-                <div key={`image-container-${index}`} className="w-full">
-                  <Card 
-                    key={`image-${index}`} 
-                    className="overflow-hidden group relative aspect-square w-full cursor-pointer"
-                    onClick={() => openPreview(index)}
-                  >
-                    <div className={`absolute inset-0 flex items-center justify-center bg-muted/20 transition-opacity ${loadedImages[index] ? 'opacity-0' : 'opacity-100'}`}>
-                      <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <Image 
-                      src={imageUrl} 
-                      alt={`用户生成的图像 ${index + 1}`} 
-                      fill 
-                      className={`object-cover transition-transform duration-300 group-hover:scale-105 ${loadedImages[index] ? 'opacity-100' : 'opacity-0'}`}
-                      onLoad={() => handleImageLoad(index)}
-                      sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      priority={index === 0}
-                    />
-                  </Card>
-                </div>
-              ))
-            ) : (
-              // 显示空状态 - 只显示一个占位卡片
-              <Card 
-                className="overflow-hidden aspect-square flex items-center justify-center bg-muted/30 w-full"
-              >
-                <div className="flex flex-col items-center gap-2 text-muted-foreground p-4 text-center">
-                  <ImageIcon className="h-8 w-8" />
-                  <p className="text-sm">创建您的第一张AI图像</p>
-                </div>
-              </Card>
-            )}
-          </div>
-          
-          {/* 提示词 - 只在有图片且有提示词的情况下显示一行 */}
-          {images.length > 0 && currentPrompt && (
-            <PromptDisplay prompt={currentPrompt} />
-          )}
-        </div>
-      )}
-      
-      {/* 图片预览弹窗 */}
-      {previewIndex !== null && images.length > 0 && (
-        <ImagePreview 
-          images={images} 
-          currentIndex={previewIndex} 
-          onClose={closePreview}
-          prompt={currentPrompt}
-        />
-      )}
-    </div>
-  );
-}
-
-// 历史记录项组件
-function HistoryItem({ 
-  history, 
-  onSelect, 
-  isSelected 
-}: { 
-  history: ImageGenerationHistory, 
-  onSelect: () => void,
-  isSelected: boolean
-}) {
-  // 确保至少有一张图片
-  const thumbnailUrl = history.image_urls[0] || '';
-  const date = new Date(history.created_at).toLocaleString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-
-  return (
-    <div 
-      className={`flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors ${
-        isSelected ? 'bg-primary/10' : 'hover:bg-accent'
-      }`}
-      onClick={onSelect}
-    >
-      <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md border">
-        {thumbnailUrl ? (
-          <Image
-            src={thumbnailUrl}
-            alt="缩略图"
-            fill
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-muted">
-            <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
-          </div>
-        )}
-      </div>
-      <div className="flex-1 flex flex-col min-w-0">
-        <p className="text-sm font-medium truncate">{history.prompt}</p>
-        <p className="text-xs text-muted-foreground">{date} · {history.image_urls.length}张图片</p>
-      </div>
-    </div>
-  );
-}
-
-// 历史记录列表组件
-function HistoryList({ 
-  history, 
-  isLoading, 
-  error,
-  onSelectHistory,
-  selectedIndex
-}: { 
-  history: ImageGenerationHistory[],
-  isLoading: boolean,
-  error: string | null,
-  onSelectHistory: (index: number) => void,
-  selectedIndex: number | null
-}) {
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="flex items-center gap-3 p-2">
-            <div className="h-12 w-12 flex-shrink-0 rounded-md bg-muted/30 animate-pulse"></div>
-            <div className="flex-1 space-y-2">
-              <div className="h-4 bg-muted/30 rounded animate-pulse"></div>
-              <div className="h-3 w-24 bg-muted/30 rounded animate-pulse"></div>
+              <div className="w-[25%] bg-muted/10 p-3 border border-muted/20 min-h-[80px]">
+                <p className="text-sm text-muted-foreground">
+                  {currentPrompt || "正在处理您的提示词..."}
+                </p>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  className="opacity-50 h-7 w-7 mt-2"
+                  disabled
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           </div>
-        ))}
+        )}
+      
+        {/* 已生成的图片列表 */}
+        {viewItems.length > 0 ? (
+          viewItems.map((item, itemIndex) => (
+            <div key={itemIndex} className="overflow-hidden">
+              <div className="mb-2 text-sm font-semibold text-muted-foreground">
+                {formatDateTime(item.createdAt)}
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-[65%] flex space-x-1">
+                  {item.imageUrls.slice(0, 4).map((url, imgIndex) => (
+                    <div 
+                      key={imgIndex} 
+                      className="aspect-square w-1/4 relative cursor-pointer bg-muted/10"
+                      onClick={() => openPreview(itemIndex, imgIndex)}
+                    >
+                      <Image 
+                        src={url} 
+                        alt={`生成的图像 ${imgIndex + 1}`}
+                        fill
+                        className="object-cover"
+                        onLoad={() => {
+                          // 计算全局索引
+                          let globalIndex = 0;
+                          for (let i = 0; i < itemIndex; i++) {
+                            globalIndex += viewItems[i].imageUrls.length;
+                          }
+                          globalIndex += imgIndex;
+                          handleImageLoad(globalIndex);
+                        }}
+                        priority={itemIndex === 0} // 优先加载最新记录的图片
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="w-[25%] bg-muted/10 p-3 border border-muted/20 min-h-[80px]">
+                  <p className="text-sm text-muted-foreground">
+                    {item.prompt}
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="mt-2 h-7 w-7"
+                    onClick={(e) => copyPrompt(item.prompt, e)}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          // 无图片提示
+          !isLoading && (
+            <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+              <ImageIcon className="h-12 w-12 mb-4" />
+              <h3 className="text-lg font-medium">暂无生成记录</h3>
+              <p className="text-sm mt-1">输入提示词开始创作您的第一张AI图像</p>
+            </div>
+          )
+        )}
       </div>
-    );
-  }
-
-  if (error) {
-    return <ErrorDisplay message={error} />;
-  }
-
-  if (history.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        <p>暂无历史记录</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1 max-h-[350px] overflow-y-auto pr-1">
-      {history.map((item, index) => (
-        <HistoryItem 
-          key={item.id} 
-          history={item} 
-          onSelect={() => onSelectHistory(index)}
-          isSelected={selectedIndex === index}
+      
+      {isPreviewOpen && (
+        <ImagePreview 
+          images={allImages}
+          currentIndex={previewIndex}
+          onClose={closePreview}
+          prompt={previewPrompt}
         />
-      ))}
+      )}
     </div>
   );
 }
 
-// 保存生成记录
-interface GenerationRecord {
-  prompt: string;
-  imageUrls: string[];
-  timestamp: number;
-}
-
-// 导出客户端页面组件
+// 主页面组件
 export default function ClientPage() {
-  // 使用文生图hook
+  const [inputPrompt, setInputPrompt] = useState("");
+  const [currentPrompt, setCurrentPrompt] = useState("");
+  const [isAllLoading, setIsAllLoading] = useState(true);
+  
   const { 
-    generateImages, 
-    isGenerating, 
-    isLoading, 
     imageUrls, 
+    isLoading, 
     error,
     credits,
     isCreditsLoading,
-    creditsError,
     history,
     isHistoryLoading,
-    historyError,
+    generateImages,
     fetchUserHistory
   } = useTextToImage();
-  
-  // 输入提示词状态
-  const [inputPrompt, setInputPrompt] = useState("");
-  
-  // 当前生成的提示词
-  const [currentPrompt, setCurrentPrompt] = useState("");
-  
-  // 选中的历史记录索引
-  const [selectedHistoryIndex, setSelectedHistoryIndex] = useState<number | null>(null);
-  
-  // 当前显示的图片
-  const [displayedImages, setDisplayedImages] = useState<string[]>([]);
 
-  // 当图片数组变化时打印日志
+  // 处理页面加载状态
   useEffect(() => {
-    if (imageUrls.length > 0) {
-      console.log('收到新的图片数组:', imageUrls);
-      setDisplayedImages(imageUrls);
-      setSelectedHistoryIndex(null); // 重置历史记录选择
+    if (!isHistoryLoading && !isCreditsLoading) {
+      // 当历史和点数数据都加载完成时，移除整体加载状态
+      setIsAllLoading(false);
     }
-  }, [imageUrls]);
+  }, [isHistoryLoading, isCreditsLoading]);
   
-  // 处理生成图像
+  // 处理图像生成
   const handleGenerate = async (prompt: string) => {
-    console.log('开始生成图像，提示词:', prompt);
-    // 保存当前提示词
-    setCurrentPrompt(prompt);
-    await generateImages(prompt);
-  };
-
-  // 处理选择历史记录
-  const handleSelectHistory = (index: number) => {
-    if (index >= 0 && index < history.length) {
-      const selectedHistory = history[index];
-      setDisplayedImages(selectedHistory.image_urls);
-      setCurrentPrompt(selectedHistory.prompt);
-      setSelectedHistoryIndex(index);
+    try {
+      setCurrentPrompt(prompt);
+      await generateImages(prompt);
+    } catch (error) {
+      console.error("生成图像失败:", error);
+      throw error;
     }
   };
 
-  // 使用full-width-container强制覆盖父容器宽度限制
   return (
-    <div className="full-width-container">
-      <div className="content-container py-4">
-        {/* 顶部提示词输入区域 */}
-        <PromptInputForm 
-          credits={credits} 
-          onGenerate={handleGenerate} 
-          setInputPrompt={setInputPrompt}
-          inputPrompt={inputPrompt}
-          isCreditsLoading={isCreditsLoading}
-        />
-        
-        {/* 主体内容区 */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-          {/* 左侧历史记录列表 */}
-          <div className="md:col-span-1">
-            <div className="rounded-lg border bg-background p-4">
-              <h2 className="text-lg font-bold mb-3">历史记录</h2>
-              <HistoryList 
-                history={history}
-                isLoading={isHistoryLoading}
-                error={historyError}
-                onSelectHistory={handleSelectHistory}
-                selectedIndex={selectedHistoryIndex}
-              />
-            </div>
-          </div>
-          
-          {/* 右侧图片展示区域 */}
-          <div className="md:col-span-3">
-            <ImageGallery 
-              images={displayedImages} 
-              isLoading={isLoading || isGenerating}
-              error={error}
-              currentPrompt={currentPrompt}
-            />
-          </div>
-        </div>
-      </div>
+    <div className="container mx-auto py-8 space-y-6">
+      {/* 提示词输入表单 */}
+      <PromptInputForm 
+        credits={credits}
+        onGenerate={handleGenerate}
+        setInputPrompt={setInputPrompt}
+        inputPrompt={inputPrompt}
+        isCreditsLoading={isCreditsLoading}
+      />
+      
+      {/* 图片展示区域 */}
+      <ImageGallery 
+        images={imageUrls} 
+        isLoading={isLoading}
+        error={error}
+        currentPrompt={currentPrompt}
+        isAllLoading={isAllLoading}
+        history={history}
+      />
     </div>
   );
 } 
