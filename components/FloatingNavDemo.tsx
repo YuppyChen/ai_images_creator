@@ -1,31 +1,35 @@
 "use client"
 
 import React from "react"
-import { FloatingNav } from "@/components/ui/floating-navbar"
+import { Navbar1 } from "@/components/shadcnblocks-com-navbar1"
 import { Home, User, LifeBuoy } from "lucide-react"
 
 export function FloatingNavDemo() {
-  const navItems = [
-    {
-      name: "首页",
-      link: "/",
-      icon: <Home className="h-4 w-4 text-neutral-500 dark:text-white" />,
-    },
-    {
-      name: "关于",
-      link: "/about",
-      icon: <User className="h-4 w-4 text-neutral-500 dark:text-white" />,
-    },
-    {
-      name: "支持",
-      link: "/support",
-      icon: <LifeBuoy className="h-4 w-4 text-neutral-500 dark:text-white" />,
-    },
+  const logo = {
+    url: "https://www.shadcnblocks.com",
+    src: "https://www.shadcnblocks.com/images/block/block-1.svg",
+    alt: "logo",
+    title: "AI 图像创建器"
+  }
+
+  const menu = [
+    { title: "首页", url: "/" },
+    { title: "关于", url: "/about" },
+    { title: "支持", url: "/support" }
   ]
+
+  const auth = {
+    login: { text: "登录", url: "/sign-in" },
+    signup: { text: "注册", url: "/sign-up" }
+  }
 
   return (
     <div className="relative w-full">
-      <FloatingNav navItems={navItems} alwaysVisible={true} />
+      <Navbar1 
+        logo={logo} 
+        menu={menu} 
+        auth={auth}
+      />
       {/* <DummyContent /> */}
     </div>
   )

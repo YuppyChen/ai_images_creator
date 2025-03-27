@@ -42,10 +42,10 @@ export default async function Signup(props: {
           <SubmitButton formAction={signUpAction} pendingText="注册中...">
             注册
           </SubmitButton>
-          <FormMessage message={searchParams} />
+          {/* <FormMessage message={searchParams} /> */}
         </div>
       </form>
-      <SmtpMessage />
+      {/* <SmtpMessage /> */}
     </>
   );
 }
