@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ImageIcon, PlusCircle, X, ChevronLeft, ChevronRight, AlertCircle, Check, Copy } from "lucide-react";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ImageGenerationLoading } from "@/components/ui/loading";
 import useTextToImage, { ImageGenerationHistory } from "@/components/hooks/use-text-to-image";
 import React from "react";
@@ -157,8 +157,8 @@ function PromptDisplay({ prompt }: { prompt: string }) {
 // 骨架屏单个图片
 function SkeletonImage() {
   return (
-    <div className="aspect-square bg-muted/30 rounded-md animate-pulse flex items-center justify-center">
-      <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+    <div className="aspect-square bg-muted/50 rounded-md animate-pulse flex items-center justify-center border border-muted/30">
+      <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
     </div>
   );
 }
@@ -281,7 +281,7 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
   const [previewPrompt, setPreviewPrompt] = useState("");
   
   // 图片加载状态
-  const [loadedImages, setLoadedImages] = useState<boolean[]>([]);
+  const [loadedImages, setLoadedImages] = useState<{[key: string]: boolean}>({});
   
   // 创建组合后的视图数据，将图片与其来源的提示词关联起来
   const viewItems = React.useMemo(() => {
@@ -289,7 +289,8 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
     let items: {
       imageUrls: string[], 
       prompt: string, 
-      createdAt: string
+      createdAt: string,
+      id: string // 添加唯一ID
     }[] = [];
     
     // 添加历史记录中的图片，每个历史记录作为一组
@@ -297,7 +298,8 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
       items.push({
         imageUrls: item.image_urls,
         prompt: item.prompt,
-        createdAt: item.created_at
+        createdAt: item.created_at,
+        id: `${item.id || item.created_at}` // 使用ID或创建时间作为唯一标识
       });
     });
     
@@ -307,26 +309,28 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
     return items;
   }, [history]);
   
-  // 初始化图片加载状态
-  useEffect(() => {
-    // 计算所有历史记录中的总图片数
-    const totalImages = viewItems.reduce((total, item) => total + item.imageUrls.length, 0);
-    if (totalImages > 0) {
-      setLoadedImages(new Array(totalImages).fill(false));
-    }
-  }, [viewItems]);
-  
   // 处理图片加载完成
-  const handleImageLoad = (index: number) => {
-    setLoadedImages(prev => {
-      const newState = [...prev];
-      newState[index] = true;
-      return newState;
-    });
+  const handleImageLoad = (url: string) => {
+    setLoadedImages(prev => ({
+      ...prev,
+      [url]: true
+    }));
+  };
+  
+  // 处理图片加载错误
+  const handleImageError = (url: string) => {
+    console.error(`图片加载失败: ${url}`);
+    setLoadedImages(prev => ({
+      ...prev,
+      [url]: false
+    }));
   };
   
   // 打开预览，itemIndex是记录索引，imageIndex是该记录内的图片索引
   const openPreview = (itemIndex: number, imageIndex: number = 0) => {
+    // 获取所有可用的图片URL
+    const allValidImages = viewItems.flatMap(item => item.imageUrls);
+    
     // 计算全局图片索引
     let globalIndex = 0;
     for (let i = 0; i < itemIndex; i++) {
@@ -382,21 +386,21 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
           {Array.from({ length: 2 }).map((_, i) => (
             <div key={i} className="overflow-hidden">
               <div className="mb-2 text-sm font-semibold text-muted-foreground">
-                <div className="h-5 w-32 bg-muted/20 animate-pulse"></div>
+                <div className="h-5 w-32 bg-muted/40 animate-pulse rounded-md"></div>
               </div>
               <div className="flex items-start gap-4">
                 <div className="w-[65%] flex space-x-1">
                   {Array.from({ length: 4 }).map((_, imgIdx) => (
-                    <div key={imgIdx} className="aspect-square w-1/4 bg-muted/20 animate-pulse">
+                    <div key={imgIdx} className="aspect-square w-1/4 bg-muted/40 animate-pulse rounded-md border border-muted/30">
                       <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="h-5 w-5 text-muted-foreground/20" />
+                        <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="w-[25%] h-full bg-muted/10 p-3 animate-pulse min-h-[80px]">
-                  <div className="h-4 bg-muted/30 animate-pulse mb-2 rounded-sm w-[80%]"></div>
-                  <div className="h-4 bg-muted/30 animate-pulse w-[60%] rounded-sm"></div>
+                <div className="w-[25%] h-full bg-muted/20 p-3 animate-pulse min-h-[80px] rounded-md border border-muted/30">
+                  <div className="h-4 bg-muted/50 animate-pulse mb-2 rounded-sm w-[80%]"></div>
+                  <div className="h-4 bg-muted/50 animate-pulse w-[60%] rounded-sm"></div>
                 </div>
               </div>
             </div>
@@ -423,10 +427,16 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
               正在生成...
             </div>
             <div className="flex items-start gap-4">
-              <div className="w-[65%] aspect-video bg-muted/10 relative">
-                <ImageGenerationLoading />
+              <div className="w-[65%] flex space-x-1">
+                {Array.from({ length: 4 }).map((_, imgIdx) => (
+                  <div key={imgIdx} className="aspect-square w-1/4 bg-muted/40 animate-pulse rounded-md border border-muted/30">
+                    <div className="w-full h-full flex items-center justify-center">
+                      <ImageGenerationLoading />
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="w-[25%] bg-muted/10 p-3 border border-muted/20 min-h-[80px]">
+              <div className="w-[25%] bg-muted/20 p-3 border border-muted/30 min-h-[80px] rounded-md">
                 <p className="text-sm text-muted-foreground">
                   {currentPrompt || "正在处理您的提示词..."}
                 </p>
@@ -446,7 +456,7 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
         {/* 已生成的图片列表 */}
         {viewItems.length > 0 ? (
           viewItems.map((item, itemIndex) => (
-            <div key={itemIndex} className="overflow-hidden">
+            <div key={item.id} className="overflow-hidden">
               <div className="mb-2 text-sm font-semibold text-muted-foreground">
                 {formatDateTime(item.createdAt)}
               </div>
@@ -454,30 +464,34 @@ function ImageGallery({ images, isLoading, error, currentPrompt, isAllLoading, h
                 <div className="w-[65%] flex space-x-1">
                   {item.imageUrls.slice(0, 4).map((url, imgIndex) => (
                     <div 
-                      key={imgIndex} 
+                      key={`${item.id}-${imgIndex}`} 
                       className="aspect-square w-1/4 relative cursor-pointer bg-muted/10"
                       onClick={() => openPreview(itemIndex, imgIndex)}
                     >
-                      <Image 
-                        src={url} 
-                        alt={`生成的图像 ${imgIndex + 1}`}
-                        fill
-                        className="object-cover"
-                        onLoad={() => {
-                          // 计算全局索引
-                          let globalIndex = 0;
-                          for (let i = 0; i < itemIndex; i++) {
-                            globalIndex += viewItems[i].imageUrls.length;
-                          }
-                          globalIndex += imgIndex;
-                          handleImageLoad(globalIndex);
-                        }}
-                        priority={itemIndex === 0} // 优先加载最新记录的图片
-                      />
+                      {loadedImages[url] === false ? (
+                        <div className="w-full h-full flex items-center justify-center bg-muted/20">
+                          <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 bg-muted/40 animate-pulse flex items-center justify-center z-10">
+                            <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+                          </div>
+                          <Image 
+                            src={url} 
+                            alt={`生成的图像 ${imgIndex + 1}`}
+                            fill
+                            className={`object-cover z-20 transition-opacity duration-500 ease-in-out ${loadedImages[url] ? 'opacity-100' : 'opacity-0'}`}
+                            onLoad={() => handleImageLoad(url)}
+                            onError={() => handleImageError(url)}
+                            priority={itemIndex === 0} // 优先加载最新记录的图片
+                          />
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
-                <div className="w-[25%] bg-muted/10 p-3 border border-muted/20 min-h-[80px]">
+                <div className="w-[25%] bg-muted/10 p-3 border border-muted/20 min-h-[80px] rounded-md">
                   <p className="text-sm text-muted-foreground">
                     {item.prompt}
                   </p>
@@ -548,6 +562,11 @@ export default function ClientPage() {
     try {
       setCurrentPrompt(prompt);
       await generateImages(prompt);
+      
+      // 等待一小段时间后再刷新历史记录，确保服务器已更新
+      setTimeout(async () => {
+        await fetchUserHistory();
+      }, 800); // 增加延迟时间，确保后端处理完成
     } catch (error) {
       console.error("生成图像失败:", error);
       throw error;

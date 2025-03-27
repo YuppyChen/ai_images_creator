@@ -6,7 +6,7 @@ import { Home, User, LifeBuoy } from "lucide-react"
 
 export function FloatingNavDemo() {
   const logo = {
-    url: "https://www.shadcnblocks.com",
+    url: "/",
     src: "https://www.shadcnblocks.com/images/block/block-1.svg",
     alt: "logo",
     title: "AI 图像创建器"
