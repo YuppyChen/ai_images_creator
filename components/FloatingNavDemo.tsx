@@ -19,8 +19,8 @@ export function FloatingNavDemo() {
   ]
 
   const auth = {
-    login: { text: "登录", url: "/sign-in" },
-    signup: { text: "注册", url: "/sign-up" }
+    signup: { text: "注册", url: "/sign-up" },
+    login: { text: "登录", url: "/sign-in" }
   }
 
   return (

@@ -146,6 +146,14 @@ const Navbar1 = ({
     signup: { text: "Sign up", url: "#" },
   },
 }: Navbar1Props) => {
+  const handleAuthClick = (url: string) => {
+    if (url === "#") {
+      // 触发退出登录
+      const event = new CustomEvent("auth-click");
+      window.dispatchEvent(event);
+    }
+  };
+
   return (
     <section className="py-4">
       <div className="container">
@@ -164,10 +172,19 @@ const Navbar1 = ({
             </div>
           </div>
           <div className="flex gap-2">
-            <Button asChild variant="outline" size="sm">
+            <Button 
+              asChild 
+              variant="outline" 
+              size="sm"
+              onClick={() => handleAuthClick(auth.login.url)}
+            >
               <a href={auth.login.url}>{auth.login.text}</a>
             </Button>
-            <Button asChild size="sm">
+            <Button 
+              asChild 
+              size="sm"
+              onClick={() => handleAuthClick(auth.signup.url)}
+            >
               <a href={auth.signup.url}>{auth.signup.text}</a>
             </Button>
           </div>
