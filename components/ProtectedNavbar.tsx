@@ -29,6 +29,7 @@ export function ProtectedNavbar() {
     await supabase.auth.signOut()
     router.refresh()
     router.push("/")
+    window.location.href = "/"
   }
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export function ProtectedNavbar() {
   }, [])
 
   const auth = {
+    login: { text: "", url: "" },
     signup: { text: "退出", url: "#" }
   }
 
@@ -50,6 +52,7 @@ export function ProtectedNavbar() {
         logo={logo} 
         menu={menu} 
         auth={auth}
+        showLoginButton={false}
       />
     </div>
   )

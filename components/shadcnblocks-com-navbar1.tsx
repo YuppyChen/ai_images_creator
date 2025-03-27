@@ -54,6 +54,7 @@ interface Navbar1Props {
       url: string;
     };
   };
+  showLoginButton?: boolean;
 }
 
 const Navbar1 = ({
@@ -145,6 +146,7 @@ const Navbar1 = ({
     login: { text: "Log in", url: "#" },
     signup: { text: "Sign up", url: "#" },
   },
+  showLoginButton = true,
 }: Navbar1Props) => {
   const handleAuthClick = (url: string) => {
     if (url === "#") {
@@ -172,14 +174,16 @@ const Navbar1 = ({
             </div>
           </div>
           <div className="flex gap-2">
-            <Button 
-              asChild 
-              variant="outline" 
-              size="sm"
-              onClick={() => handleAuthClick(auth.login.url)}
-            >
-              <a href={auth.login.url}>{auth.login.text}</a>
-            </Button>
+            {showLoginButton && (
+              <Button 
+                asChild 
+                variant="outline" 
+                size="sm"
+                onClick={() => handleAuthClick(auth.login.url)}
+              >
+                <a href={auth.login.url}>{auth.login.text}</a>
+              </Button>
+            )}
             <Button 
               asChild 
               size="sm"
@@ -234,9 +238,11 @@ const Navbar1 = ({
                     </div>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Button asChild variant="outline">
-                      <a href={auth.login.url}>{auth.login.text}</a>
-                    </Button>
+                    {showLoginButton && (
+                      <Button asChild variant="outline">
+                        <a href={auth.login.url}>{auth.login.text}</a>
+                      </Button>
+                    )}
                     <Button asChild>
                       <a href={auth.signup.url}>{auth.signup.text}</a>
                     </Button>
