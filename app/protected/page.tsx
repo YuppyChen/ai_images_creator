@@ -13,5 +13,10 @@ export default async function ProtectedPage() {
     return redirect("/sign-in");
   }
 
-  return <ClientPage />;
+  // 使用全宽度容器，强制突破layout宽度限制
+  return (
+    <div className="full-width-container">
+      <ClientPage />
+    </div>
+  );
 }
