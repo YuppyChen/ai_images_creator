@@ -26,6 +26,24 @@ export interface HistoryResult {
   error: string | null;
 }
 
+// 添加超时控制的fetch函数
+const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout = 30000) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+};
+
 const useTextToImage = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [taskId, setTaskId] = useState<string | null>(null);
@@ -81,7 +99,7 @@ const useTextToImage = () => {
     try {
       setCreditsData(prev => ({ ...prev, isLoading: true, error: null }));
       
-      const response = await fetch('/api/user/credits');
+      const response = await fetchWithTimeout('/api/user/credits', {}, 15000);
       const data = await response.json();
       
       if (!response.ok) {
@@ -108,7 +126,7 @@ const useTextToImage = () => {
     try {
       setHistoryData(prev => ({ ...prev, isLoading: true, error: null }));
       
-      const response = await fetch(`/api/user/history?limit=${limit}&offset=${offset}`);
+      const response = await fetchWithTimeout(`/api/user/history?limit=${limit}&offset=${offset}`, {}, 15000);
       const data = await response.json();
       
       if (!response.ok) {
@@ -148,7 +166,7 @@ const useTextToImage = () => {
     
     try {
       console.log('开始检查任务状态:', taskId);
-      const response = await fetch(`/api/text-to-image?taskId=${taskId}`);
+      const response = await fetchWithTimeout(`/api/text-to-image?taskId=${taskId}`, {}, 30000);
       const data = await response.json();
 
       if (!response.ok) {
@@ -248,13 +266,13 @@ const useTextToImage = () => {
     try {
       console.log('开始创建图像生成任务');
       // 创建任务
-      const response = await fetch('/api/text-to-image', {
+      const response = await fetchWithTimeout('/api/text-to-image', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ prompt })
-      });
+      }, 60000); // 增加超时时间到60秒
 
       const data = await response.json();
 

@@ -3,6 +3,37 @@ import { deductUserCredits, restoreUserCredits } from '@/lib/credits-service';
 import { saveImageGenerationHistory } from '@/lib/history-service';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
+// 为全局变量添加类型声明
+declare global {
+  var activeTasksMap: Record<string, {
+    userId: string;
+    prompt: string;
+  }>;
+}
+
+// 添加请求重试函数
+async function fetchWithTimeout(url: string, options: RequestInit, timeout = 30000, retries = 3) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (retries > 0) {
+      console.log(`请求超时或失败，正在重试，剩余${retries - 1}次重试机会`);
+      return fetchWithTimeout(url, options, timeout, retries - 1);
+    }
+    throw error;
+  }
+}
+
 // 创建文生图任务
 export async function POST(request: Request) {
   try {
@@ -50,8 +81,8 @@ export async function POST(request: Request) {
 
     console.log('开始调用百炼云API创建文生图任务');
     
-    // 调用百炼云文生图API创建任务
-    const response = await fetch(
+    // 调用百炼云文生图API创建任务，使用带超时和重试的函数
+    const response = await fetchWithTimeout(
       'https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis',
       {
         method: 'POST',
@@ -70,7 +101,9 @@ export async function POST(request: Request) {
             n: 4
           }
         })
-      }
+      },
+      60000, // 60秒超时，比默认的更长
+      3      // 3次重试
     );
 
     const result = await response.json();
@@ -135,15 +168,17 @@ export async function GET(request: Request) {
 
     console.log('查询任务状态，任务ID:', taskId);
     
-    // 调用百炼云API查询任务结果
-    const response = await fetch(
+    // 调用百炼云API查询任务结果，使用带超时和重试的函数
+    const response = await fetchWithTimeout(
       `https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`,
       {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`
         }
-      }
+      },
+      30000, // 30秒超时
+      3      // 3次重试
     );
 
     const result = await response.json();
