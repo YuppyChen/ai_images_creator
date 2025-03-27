@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 
 // 创建服务端Supabase客户端，用于API路由获取会话
 export async function createServerSupabaseClient() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
